@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RU Market Navigator Live</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121933;
+      --panel-2: #182146;
+      --text: #edf2ff;
+      --muted: #9fb0db;
+      --accent: #70a5ff;
+      --good: #2ecc71;
+      --bad: #ff6b6b;
+      --warn: #ffbe55;
+      --border: rgba(255,255,255,0.08);
+      --shadow: 0 12px 30px rgba(0,0,0,0.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: linear-gradient(180deg, #09101d, #0f1730);
+      color: var(--text);
+    }
+    .app { max-width: 1520px; margin: 0 auto; padding: 24px; }
+    .header {
+      display: flex; flex-wrap: wrap; justify-content: space-between;
+      gap: 16px; align-items: center; margin-bottom: 22px;
+    }
+    .title-block h1 { margin: 0 0 8px; font-size: 32px; }
+    .title-block p { margin: 0; color: var(--muted); line-height: 1.45; max-width: 920px; }
+    .auth-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .badge {
+      background: rgba(112,165,255,0.12); color: #dce7ff;
+      border: 1px solid rgba(112,165,255,0.25);
+      padding: 10px 14px; border-radius: 999px; font-size: 14px;
+    }
+    .badge.good { color: #dfffe9; border-color: rgba(46,204,113,0.35); background: rgba(46,204,113,0.12); }
+    .badge.warn { color: #fff0cc; border-color: rgba(255,190,85,0.35); background: rgba(255,190,85,0.12); }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      border: 1px solid var(--border); border-radius: 20px; padding: 18px;
+      box-shadow: var(--shadow); backdrop-filter: blur(4px);
+    }
+    .card h2, .card h3 { margin-top: 0; }
+    .span-3 { grid-column: span 3; }
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+    @media (max-width: 980px) { .span-3, .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; } }
+    .stat-value { font-size: 28px; font-weight: 700; margin: 10px 0 6px; }
+    .small { color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .up { color: var(--good); } .down { color: var(--bad); } .warn-text { color: var(--warn); }
+    .controls {
+      display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr 1fr;
+      gap: 12px; margin-top: 10px;
+    }
+    @media (max-width: 1100px) { .controls { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 580px) { .controls { grid-template-columns: 1fr; } }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    input, select, button, textarea {
+      width: 100%; border-radius: 12px; border: 1px solid var(--border);
+      padding: 12px 14px; background: var(--panel-2); color: var(--text); font-size: 14px;
+    }
+    button {
+      cursor: pointer; background: linear-gradient(180deg, #4a7fe0, #315db2);
+      border: none; font-weight: 600;
+    }
+    button.secondary { background: #253155; border: 1px solid var(--border); }
+    button.danger { background: linear-gradient(180deg, #b64d4d, #8d2f2f); }
+    .button-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .button-row button { width: auto; min-width: 180px; }
+    .table-wrap { overflow: auto; max-height: 420px; border-radius: 14px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; min-width: 840px; background: rgba(255,255,255,0.02); }
+    th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; font-size: 14px; }
+    th { position: sticky; top: 0; background: #192345; z-index: 1; }
+    .overlay {
+      position: fixed; inset: 0; background: rgba(5, 9, 19, 0.78);
+      display: flex; align-items: center; justify-content: center; padding: 24px; z-index: 100;
+    }
+    .auth-modal {
+      width: min(460px, 100%); background: #11182f; border: 1px solid var(--border);
+      border-radius: 24px; padding: 24px; box-shadow: var(--shadow);
+    }
+    .auth-tabs { display: flex; gap: 10px; margin-bottom: 14px; }
+    .auth-tabs button.active { outline: 2px solid rgba(255,255,255,0.16); }
+    .hint, .status { margin-top: 12px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+    .status strong { color: var(--text); }
+    .footer-note { margin-top: 16px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    canvas { width: 100% !important; height: 360px !important; }
+    .mini-grid { display:grid; grid-template-columns: repeat(4,1fr); gap:12px; }
+    @media (max-width: 980px) { .mini-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .mini-grid { grid-template-columns: 1fr; } }
+    .mini-box { padding: 12px; border:1px solid var(--border); border-radius: 16px; background: rgba(255,255,255,0.02); }
+    .mini-box .label { font-size: 12px; color: var(--muted); }
+    .mini-box .value { font-size: 20px; font-weight: 700; margin-top: 6px; }
+    .tabs { display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 12px; }
+    .tabs button.active { outline: 2px solid rgba(112,165,255,0.3); }
+    .report-form { display:grid; grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr auto; gap:10px; align-items:end; }
+    @media (max-width: 1100px) { .report-form { grid-template-columns: 1fr 1fr; } }
+    .click-row { cursor: pointer; }
+    .click-row:hover { background: rgba(112,165,255,0.06); }
+    .active-company { background: rgba(112,165,255,0.12); }
+    .report-pickers { display:grid; grid-template-columns: minmax(280px, 1.2fr) auto minmax(280px, 1.2fr) auto; gap: 10px; align-items:end; margin-top: 14px; }
+    .report-pickers .picker-note { grid-column: 1 / -1; }
+    .report-pickers button { min-width: 220px; }
+    @media (max-width: 1100px) { .report-pickers { grid-template-columns: 1fr; } .report-pickers button { width: 100%; min-width: 0; } }
+    .commodity-grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-top: 12px; }
+    @media (max-width: 1200px) { .commodity-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 700px) { .commodity-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 480px) { .commodity-grid { grid-template-columns: 1fr; } }
+    .commodity-card { padding: 14px; border:1px solid var(--border); border-radius: 16px; background: rgba(255,255,255,0.02); cursor:pointer; transition: 0.2s ease; }
+    .commodity-card:hover { transform: translateY(-2px); background: rgba(112,165,255,0.05); }
+    .commodity-card.active { border-color: rgba(112,165,255,0.45); background: rgba(112,165,255,0.10); }
+    .commodity-name { font-size: 13px; color: var(--muted); }
+    .commodity-price { font-size: 24px; font-weight: 700; margin-top: 8px; }
+    .commodity-meta { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+    .commodity-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
+    .commodity-chart-note { margin-top: 12px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+  </style>
+</head>
+<body>
+  <div class="overlay" id="authOverlay">
+    <div class="auth-modal">
+      <h2>Вход в приложение</h2>
+      <div class="hint">
+        Это отдельное веб‑приложение с входом через Google. Первый вход автоматически создаёт вашу учётную запись в приложении.
+      </div>
+      <div id="googleSignInWrap" style="margin-top:16px; display:flex; justify-content:center;"></div>
+      <div class="status" id="authStatus"></div>
+      <div class="footer-note" style="margin-top:14px;">
+        Если кнопка не появилась, проверьте <code>GOOGLE_CLIENT_ID</code> в настройках приложения.
+      </div>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="header">
+      <div class="title-block">
+        <h1 id="pageTitle">RU Market Navigator Live</h1>
+        <p id="pageSubtitle">
+          Объединённая версия: крупные российские компании, автозагрузка данных, отчёты,
+          рабочий API с fallback и отдельный онлайн-график за сегодня в стиле биржевого терминала.
+        </p>
+      </div>
+      <div class="auth-bar">
+        <div class="badge" id="marketStatusBadge">Статус сессии: —</div>
+        <div class="badge" id="currentUserBadge">Не авторизован</div>
+        <button id="logoutBtn" class="danger" type="button" style="width:auto;display:none;">Выйти</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <section class="card span-12">
+        <h2>Управление данными</h2>
+        <div class="controls">
+          <div>
+            <label for="companySelect">Компания</label>
+            <select id="companySelect"></select>
+          </div>
+          <div>
+            <label for="fromDate">Дата начала</label>
+            <input id="fromDate" type="date" />
+          </div>
+          <div>
+            <label for="tillDate">Дата конца</label>
+            <input id="tillDate" type="date" />
+          </div>
+          <div>
+            <label for="intervalSelect">Интервал истории</label>
+            <select id="intervalSelect">
+              <option value="1">1 минута</option>
+              <option value="10">10 минут</option>
+              <option value="60">1 час</option>
+              <option value="24" selected>1 день</option>
+              <option value="7">1 неделя</option>
+            </select>
+          </div>
+          <div>
+            <label for="refreshSelect">Автообновление</label>
+            <select id="refreshSelect">
+              <option value="0">Выключено</option>
+              <option value="15000" selected>15 секунд</option>
+              <option value="30000">30 секунд</option>
+              <option value="60000">60 секунд</option>
+            </select>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <button id="loadBtn" type="button">Загрузить данные</button>
+          </div>
+        </div>
+        <div class="button-row">
+          <button id="downloadCsvBtn" class="secondary" type="button">Скачать CSV</button>
+          <button id="downloadJsonBtn" class="secondary" type="button">Скачать JSON</button>
+          <button id="downloadWatchlistBtn" class="secondary" type="button">Скачать watchlist CSV</button>
+        </div>
+        <div class="footer-note" id="apiStatusNote">
+          Источник данных: MOEX ISS. При блокировке обычного запроса приложение автоматически переключается на резервную схему загрузки.
+        </div>
+      </section>
+
+      <section class="card span-3">
+        <h3>Последняя цена</h3>
+        <div class="stat-value" id="lastPrice">—</div>
+        <div class="small" id="lastPriceMeta">Ожидание загрузки...</div>
+      </section>
+
+      <section class="card span-3">
+        <h3>Изменение</h3>
+        <div class="stat-value" id="priceChange">—</div>
+        <div class="small" id="priceChangePct">—</div>
+      </section>
+
+      <section class="card span-3">
+        <h3>Средняя цена</h3>
+        <div class="stat-value" id="avgPrice">—</div>
+        <div class="small">Среднее закрытие по выбранному диапазону</div>
+      </section>
+
+      <section class="card span-3">
+        <h3>Объём</h3>
+        <div class="stat-value" id="totalVolume">—</div>
+        <div class="small">Суммарный объём по загруженным свечам</div>
+      </section>
+
+      <section class="card span-8">
+        <h3>История цены и MA(5)</h3>
+        <canvas id="priceChart"></canvas>
+        <div class="footer-note">MA(5) — это скользящая средняя за 5 последних свечей. Она сглаживает резкие колебания цены и помогает быстрее увидеть общий краткосрочный тренд.</div>
+      </section>
+
+      <section class="card span-4">
+        <h3>Объём торгов</h3>
+        <canvas id="volumeChart"></canvas>
+      </section>
+
+      <section class="card span-8">
+        <h3>Онлайн-график за сегодня</h3>
+        <canvas id="intradayChart"></canvas>
+        <div class="footer-note" id="intradayHint">Сегодняшние внутридневные свечи. При активной сессии обновляется автоматически.</div>
+      </section>
+
+      <section class="card span-4">
+        <h3>Пульс торгового дня</h3>
+        <div class="mini-grid">
+          <div class="mini-box"><div class="label">Открытие дня</div><div class="value" id="dayOpen">—</div></div>
+          <div class="mini-box"><div class="label">Максимум дня</div><div class="value" id="dayHigh">—</div></div>
+          <div class="mini-box"><div class="label">Минимум дня</div><div class="value" id="dayLow">—</div></div>
+          <div class="mini-box"><div class="label">Последняя свеча</div><div class="value" id="dayLast">—</div></div>
+        </div>
+        <div class="mini-grid" style="margin-top:12px;">
+          <div class="mini-box"><div class="label">Изменение с открытия</div><div class="value" id="dayMove">—</div></div>
+          <div class="mini-box"><div class="label">Диапазон дня</div><div class="value" id="dayRange">—</div></div>
+          <div class="mini-box"><div class="label">Свечей сегодня</div><div class="value" id="dayBars">—</div></div>
+          <div class="mini-box"><div class="label">Последнее обновление</div><div class="value" id="lastUpdate">—</div></div>
+        </div>
+      </section>
+
+      <section class="card span-4">
+        <h3>Watchlist крупных компаний</h3>
+        <div class="table-wrap" style="max-height: 350px;">
+          <table>
+            <thead>
+              <tr><th>Тикер</th><th>Компания</th><th>Сектор</th><th>Фокус</th></tr>
+            </thead>
+            <tbody id="watchlistBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card span-12">
+        <h3>Цены на драгоценные металлы</h3>
+        <div class="small">
+          Отдельная панель для всего терминала: золото, серебро, платина и палладий.
+          Нажмите на карточку, чтобы открыть мини-график за 30 дней.
+        </div>
+        <div class="commodity-actions">
+          <button id="reloadCommoditiesBtn" class="secondary" type="button">Обновить цены металлов</button>
+        </div>
+        <div class="commodity-grid" id="commodityCards">
+          <div class="commodity-card"><div class="commodity-name">Загрузка...</div><div class="commodity-price">—</div><div class="commodity-meta">Ожидаю данные по сырью</div></div>
+        </div>
+        <div style="margin-top:16px;">
+          <canvas id="commodityChart"></canvas>
+        </div>
+        <div class="commodity-chart-note" id="commodityStatusNote">
+          Источник: MOEX ISS. Для металлов используется рынок драгоценных металлов.
+        </div>
+      </section>
+
+      <section class="card span-8">
+        <h3>Быстрые Excel-отчёты</h3>
+        <div class="small">
+          Выберите нужную <b>неделю</b> или <b>месяц</b> из списка по выбранной компании.
+          Списки строятся автоматически <b>с начала торгов компании на бирже</b>, а Excel скачивается одним кликом.
+        </div>
+        <div class="report-pickers">
+          <div>
+            <label for="reportWeekSelect">Неделя торгов</label>
+            <select id="reportWeekSelect">
+              <option value="">Сначала выберите компанию</option>
+            </select>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <button id="downloadSelectedWeekBtn" type="button">Скачать недельный Excel</button>
+          </div>
+          <div>
+            <label for="reportMonthSelect">Месяц торгов</label>
+            <select id="reportMonthSelect">
+              <option value="">Сначала выберите компанию</option>
+            </select>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <button id="downloadSelectedMonthBtn" class="secondary" type="button">Скачать месячный Excel</button>
+          </div>
+          <div class="footer-note picker-note" id="reportPeriodsInfo">
+            Доступные периоды будут заполнены автоматически после выбора компании.
+          </div>
+        </div>
+        <div class="footer-note" id="reportDownloadStatus">
+          Выберите неделю или месяц из списка и нажмите скачать.
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Дата</th><th>Закрытие</th><th>Изм. к прошлому дню</th><th>Изм. %</th><th>Объём</th></tr></thead>
+            <tbody id="simpleReportsBody"><tr><td colspan="5">После выбора периода здесь появится превью отчёта перед скачиванием Excel.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="card span-12">
+        <h3>Таблица свечей</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Дата</th><th>Время начала</th><th>Время конца</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th><th>VWAP</th><th>Изм. %</th>
+              </tr>
+            </thead>
+            <tbody id="candlesTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  
+  <script src="/config.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="/app.js" defer></script>
+</body>
+</html>

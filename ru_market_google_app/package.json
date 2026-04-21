@@ -1,0 +1,17 @@
+{
+  "name": "ru-market-navigator-google-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RU Market Navigator with Google Sign-In, Express backend and MOEX proxy",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "google-auth-library": "^9.15.1"
+  }
+}
